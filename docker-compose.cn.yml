@@ -1,0 +1,108 @@
+# 中国大陆优化版：预置中文 Grafana 仪表盘 + iTesly 移动端 API（含 OTA 推送提醒）
+services:
+  teslamate:
+    image: teslamate/teslamate:latest
+    restart: unless-stopped
+    cap_drop:
+      - all
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${TESLAMATE_PORT:-4000}:4000"
+    volumes:
+      - ./import:/opt/app/import
+    environment:
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?请先运行 ./install.sh 或在 .env 中设置 ENCRYPTION_KEY}
+      DATABASE_USER: teslamate
+      DATABASE_PASS: ${DATABASE_PASS:?请先运行 ./install.sh 或在 .env 中设置 DATABASE_PASS}
+      DATABASE_NAME: teslamate
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      MQTT_HOST: mosquitto
+      TZ: ${TZ:-Asia/Shanghai}
+    depends_on:
+      database:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+
+  database:
+    image: postgres:18-trixie
+    restart: unless-stopped
+    volumes:
+      - ./data/postgres:/var/lib/postgresql
+    environment:
+      POSTGRES_USER: teslamate
+      POSTGRES_PASSWORD: ${DATABASE_PASS:?请先运行 ./install.sh 或在 .env 中设置 DATABASE_PASS}
+      POSTGRES_DB: teslamate
+      TZ: ${TZ:-Asia/Shanghai}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teslamate -d teslamate"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  grafana:
+    image: bswlhbhmt816/teslamate-chinese-dashboards:latest
+    restart: unless-stopped
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+    environment:
+      DATABASE_USER: teslamate
+      DATABASE_PASS: ${DATABASE_PASS:?请先运行 ./install.sh 或在 .env 中设置 DATABASE_PASS}
+      DATABASE_NAME: teslamate
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      GF_USERS_DEFAULT_LANGUAGE: zh-Hans
+      TZ: ${TZ:-Asia/Shanghai}
+    depends_on:
+      database:
+        condition: service_healthy
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    command: mosquitto -c /mosquitto-no-auth.conf
+    volumes:
+      - ./mosquitto-no-auth.conf:/mosquitto-no-auth.conf:ro
+      - ./data/mosquitto/config:/mosquitto/config
+      - ./data/mosquitto/data:/mosquitto/data
+      - ./data/mosquitto/log:/mosquitto/log
+
+  itesly-api:
+    image: ghcr.io/houtx/itesly-api:latest
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${ITESLY_API_PORT:-8080}:8080"
+    volumes:
+      - ./releases:/releases
+    environment:
+      PORT: 8080
+      TZ: ${TZ:-Asia/Shanghai}
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      DATABASE_NAME: teslamate
+      DATABASE_USER: teslamate_app
+      DATABASE_PASS: ${ITESLY_DATABASE_PASS:?请先运行 ./install.sh 或在 .env 中设置 ITESLY_DATABASE_PASS}
+      ITESLY_API_TOKEN: ${ITESLY_API_TOKEN:?请先运行 ./install.sh 或在 .env 中设置 ITESLY_API_TOKEN}
+      ITESLY_PUBLISH_TOKEN: ${ITESLY_PUBLISH_TOKEN:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-teslamate}
+      RELEASE_DIR: /releases
+    depends_on:
+      database:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/app/api/v1/service-health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 15s
+      timeout: 5s
+      retries: 5

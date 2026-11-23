@@ -1,0 +1,7 @@
+.env
+data/
+import/
+releases/
+docker-compose.itesly.yml
+*.log
+.DS_Store

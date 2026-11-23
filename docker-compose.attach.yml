@@ -1,0 +1,43 @@
+# 已有 TeslaMate 用户专用模板：仅启动 iTesly 移动端 API 并接入现有 TeslaMate 网络
+# 推荐使用 `./install.sh` 选择“已有 TeslaMate 一键接入”自动生成并启动，无需手改网络名。
+services:
+  itesly-api:
+    image: ghcr.io/houtx/itesly-api:latest
+    container_name: itesly-api
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${ITESLY_API_PORT:-8080}:8080"
+    volumes:
+      - ./releases:/releases
+    environment:
+      PORT: 8080
+      TZ: ${TZ:-Asia/Shanghai}
+      DATABASE_HOST: ${ITESLY_DB_HOST:-database}
+      DATABASE_PORT: ${ITESLY_DB_PORT:-5432}
+      DATABASE_NAME: ${ITESLY_DB_NAME:-teslamate}
+      DATABASE_USER: teslamate_app
+      DATABASE_PASS: ${ITESLY_DATABASE_PASS:?请设置 ITESLY_DATABASE_PASS}
+      ITESLY_API_TOKEN: ${ITESLY_API_TOKEN:?请设置 ITESLY_API_TOKEN}
+      ITESLY_PUBLISH_TOKEN: ${ITESLY_PUBLISH_TOKEN:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      MQTT_HOST: ${ITESLY_MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${ITESLY_MQTT_PORT:-1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-teslamate}
+      RELEASE_DIR: /releases
+    networks:
+      - teslamate_net
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/app/api/v1/service-health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+networks:
+  teslamate_net:
+    external: true
+    name: ${TESLAMATE_DOCKER_NETWORK:-teslamate_default}
