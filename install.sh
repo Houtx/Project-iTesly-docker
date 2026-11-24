@@ -242,15 +242,15 @@ if [[ "$MODE" == "fresh" ]]; then
   if [[ -z "$ACCESS_MODE" ]]; then
     if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
       echo ""
-      echo "步骤 2/2：请选择公网访问 / 一键打洞方式（手机出门用 5G 也能连）"
-      echo "  1) Cloudflare 免费一键打洞（无需域名、立即可得 https://xxx.trycloudflare.com，推荐体验）"
-      echo "  2) 绑定自己的域名（Caddy 自动申请永久 HTTPS 证书，需提前把域名解析到本机 IP）"
-      echo "  3) 暂不打洞（仅用服务器 IP:8080，或自行用 Tailscale / 已有反代）"
+      echo "步骤 2/2：请选择公网访问方式（手机出门用 5G 也能安全连接）"
+      echo "  1) 绑定自己的域名（强烈推荐：Caddy 自动申请免费 HTTPS，国内直连低延迟且永久稳定）"
+      echo "  2) 暂不配置公网（仅用内网 IP:8080，或自行使用 Tailscale 免费组网 / 已有反代）"
+      echo "  3) Cloudflare 免费临时打洞（无需域名体验用，国内访问延迟较高，仅适合临时测试/海外VPS）"
       read -r -p "请选择 [1/2/3] (默认 1): " acc_choice
       case "${acc_choice:-1}" in
-        2) ACCESS_MODE="domain" ;;
-        3) ACCESS_MODE="direct" ;;
-        *) ACCESS_MODE="tunnel" ;;
+        2) ACCESS_MODE="direct" ;;
+        3) ACCESS_MODE="tunnel" ;;
+        *) ACCESS_MODE="domain" ;;
       esac
     else
       ACCESS_MODE="direct"
@@ -258,11 +258,16 @@ if [[ "$MODE" == "fresh" ]]; then
   fi
 
   if [[ "$ACCESS_MODE" == "domain" && -z "$DOMAIN_NAME" ]]; then
-    read -r -p "请输入你的域名（例如 itesly.example.com，不含 https://）: " DOMAIN_NAME
+    echo ""
+    echo "提示：请确保你的域名已添加 A 记录指向当前服务器公网 IP，且防火墙已放行 80 和 443 端口。"
+    read -r -p "请输入你的域名（如 itesly.example.com；若暂未准备域名直接回车将切换为方案2）: " DOMAIN_NAME
     DOMAIN_NAME="${DOMAIN_NAME#https://}"
     DOMAIN_NAME="${DOMAIN_NAME#http://}"
     DOMAIN_NAME="${DOMAIN_NAME%%/*}"
-    [[ -n "$DOMAIN_NAME" ]] || fatal "域名不能为空。"
+    if [[ -z "$DOMAIN_NAME" ]]; then
+      warn "未填写域名，已自动切换为「2) 暂不配置公网」，后续随时可重新运行 ./install.sh 绑定域名。"
+      ACCESS_MODE="direct"
+    fi
   fi
 
   base_compose="docker-compose.yml"

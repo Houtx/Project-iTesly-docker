@@ -17,7 +17,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Houtx/Project-iTesly-docker/
 The interactive wizard will:
 1. Install Docker automatically (on Linux) if missing.
 2. Deploy **TeslaMate + PostgreSQL 18 + Grafana + Mosquitto + iTesly API** with auto-generated strong secrets and the least-privilege `teslamate_app` database role.
-3. Optionally expose your API over HTTPS automatically via **Cloudflare Quick Tunnel** (`https://xxx.trycloudflare.com`, zero domain needed) or **Caddy automatic HTTPS** (with your own domain).
+3. Optionally configure **Caddy automatic HTTPS** (recommended, with your own domain), or use **Cloudflare Quick Tunnel** (`https://xxx.trycloudflare.com`, zero domain needed for quick testing).
 4. Print the exact **Server URL** and **API Token** to paste into the **iTesly** mobile app.
 
 ---
