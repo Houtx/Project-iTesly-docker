@@ -38,6 +38,21 @@ Non-interactive flags for fresh installs:
 
 ---
 
+## Option 3: Let Your AI Agent Deploy It for You
+
+Send this repository URL to your AI coding agent (Antigravity, Claude Code, Cursor, Codex, etc.) with your server SSH details and domain.
+
+**Agent Instructions:**
+1. Download the repo and run `install.sh` with **non-interactive flags** (never block on interactive `read` prompts):
+   - Fresh install + domain HTTPS: `./install.sh --official --domain <domain>` (or `--cn --domain <domain>`)
+   - Fresh install without domain: `./install.sh --official`
+   - Attach to existing TeslaMate: `./install.sh --attach <teslamate_dir>`
+   - Bind domain later: `./install.sh --bind-domain <domain>`
+2. Verify `curl -fsS http://127.0.0.1:8080/app/api/v1/service-health` returns `{"status":"ok",...}` (and `https://<domain>/app/api/v1/service-health` if a domain was bound).
+3. Return **only** the iTesly App **Server URL**, **`ITESLY_API_TOKEN`**, and the TeslaMate onboarding URL (`http://<ip>:4000`). Do not print `DATABASE_PASS` or `ENCRYPTION_KEY`.
+
+---
+
 ## Bind a Domain Later (Auto HTTPS)
 
 If you deployed without a domain initially, point your domain's `A` record to your server IP, open ports `80` and `443`, and run:

@@ -4,9 +4,10 @@
 
 > 专为 **iTesly** 手机 App（iOS / Android）打造的 **TeslaMate + 服务端** 傻瓜式 Docker 部署工具。
 >
-> **两种方案自由选择**：
-> - **方案一（纯小白专用）**：刚买了一台空白服务器（VPS），只需粘贴 **1 条命令**，自动装好 Docker、部署全套服务、**一键公网打洞生成 `https://` 地址**并直接生成手机 App 所需的 **Token**。
+> **三种方式自由选择**：
+> - **方案一（纯小白自己点几下）**：刚买了一台空白服务器（VPS），只需粘贴 **1 条命令**，脚本交互引导你装好 Docker、部署服务、**绑定域名自动申请 HTTPS 证书**并生成 **Token**。
 > - **方案二（老用户 / 技术人员专用）**：已经装过 TeslaMate，零侵入一键接入现有数据库与 MQTT（不重启原有服务），或自行定制 Docker Compose。
+> - **方案三（最省心：交给你的 AI Agent 帮你装）**：直接把本仓库地址发给你的 AI 助手（Claude Code / Cursor / Antigravity 等），让它全程代劳。
 
 ---
 
@@ -102,6 +103,43 @@ cd Project-iTesly-docker
 # 全新部署（中国优化版）+ 绑定自有域名
 ./install.sh --cn --domain itesly.example.com
 ```
+
+---
+
+## 方案三：把本仓库发给你的 AI Agent 帮你自动部署
+
+如果你平时已经在用 **Antigravity / Claude Code / Cursor / Codex** 等 AI Agent 工具，甚至不需要自己敲任何命令——直接把本仓库链接和下面这段话发给你的 Agent 即可：
+
+> **复制这段话发给你的 AI Agent：**
+> ```text
+> 请帮我按照 https://github.com/Houtx/Project-iTesly-docker 的说明，在我的服务器（IP: <你的服务器IP>，SSH 方式: <密码或密钥>）上部署 Project-iTesly 服务端。
+> 我的域名是 <你的域名，没有就写“暂不绑定域名”>（如已有 TeslaMate，目录在 <现有目录>）。
+> 请在部署并验证健康检查通过后，把手机 App 需要填写的「服务地址」、「访问令牌」以及 TeslaMate 首次登录地址发给我。
+> ```
+
+### 给 AI Agent 的执行规范（Agent Playbook）
+
+1. **禁止卡在交互式 `read` 提示**：在目标主机下载仓库后，务必使用**非交互参数**调用 [`install.sh`](install.sh)：
+   ```bash
+   curl -fsSL https://github.com/Houtx/Project-iTesly-docker/archive/refs/heads/main.tar.gz | tar -xz
+   cd Project-iTesly-docker-main && chmod +x install.sh
+   ```
+   按用户实际情况任选一条执行（脚本在未安装 Docker 时会自动调用官方脚本安装并启动）：
+   - **全新部署 + 自有域名 HTTPS**：`./install.sh --cn --domain <用户域名>`
+   - **全新部署 + 暂不绑域名（内网 / Tailscale）**：`./install.sh --cn`
+   - **全新部署 + Cloudflare 临时打洞**：`./install.sh --cn --tunnel`
+   - **已有 TeslaMate 目录零侵入接入**：`./install.sh --attach <现有teslamate目录>`
+   - **已部署后补绑域名**：`./install.sh --bind-domain <用户域名>`
+2. **前置与端口检查**：
+   - 若用户使用 `--domain`，先向用户确认域名 `A` 记录已指向当前服务器公网 IP，且云安全组 / 防火墙已放行 **`80`、`443`**（HTTPS）以及 **`4000`**（仅用于首次登录授权 TeslaMate）。
+3. **验证服务可用**：
+   - 执行 `curl -fsS http://127.0.0.1:8080/app/api/v1/service-health`（如绑定了域名再验证 `curl -fsS https://<用户域名>/app/api/v1/service-health`），确认返回 `{"status":"ok",...}`。
+   - 检查 `docker compose ps` 中所有容器均为 `Up` / `healthy`。
+4. **安全与交付要求**：
+   - **不要**把 `.env` 中的 `DATABASE_PASS`、`ENCRYPTION_KEY`、`ITESLY_DATABASE_PASS`、`ITESLY_PUBLISH_TOKEN` 输出给用户或写入任何代码/文档。
+   - 只向用户返回：
+     1. 手机 iTesly App 所需的 **服务地址**（`https://<域名>` 或 `http://<IP>:8080`）与 **`ITESLY_API_TOKEN`**；
+     2. **TeslaMate 首次授权地址**（`http://<IP>:4000`），并提示用户先使用 Tesla Auth 登录一次同步车辆数据。
 
 ---
 
