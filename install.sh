@@ -322,7 +322,8 @@ if [[ "$MODE" == "fresh" ]]; then
 
   if [[ "$ACCESS_MODE" == "domain" && -z "$DOMAIN_NAME" ]]; then
     echo ""
-    echo "提示：请确保你的域名已添加 A 记录指向当前服务器公网 IP，且防火墙已放行 80 和 443 端口。"
+    echo "提示：请先在域名服务商处添加 A 记录指向当前服务器公网 IP，并放行 80 和 443 端口。"
+    echo "      （如还没有域名，推荐 腾讯云DNSPod / 阿里云万网 / Cloudflare / Namesilo，均支持国内支付）"
     read -r -p "请输入你的域名（如 itesly.example.com；若暂未准备域名直接回车将切换为方案2）: " DOMAIN_NAME
     DOMAIN_NAME="${DOMAIN_NAME#https://}"
     DOMAIN_NAME="${DOMAIN_NAME#http://}"
