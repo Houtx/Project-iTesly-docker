@@ -38,6 +38,19 @@ Non-interactive flags for fresh installs:
 
 ---
 
+## Bind a Domain Later (Auto HTTPS)
+
+If you deployed without a domain initially, point your domain's `A` record to your server IP, open ports `80` and `443`, and run:
+
+```bash
+cd ~/Project-iTesly-docker
+./install.sh --bind-domain itesly.example.com
+```
+
+Caddy will automatically issue and renew your free Let's Encrypt TLS certificate without touching your existing database or API token.
+
+---
+
 ## License
 
 Licensed under [GPL-3.0](LICENSE).

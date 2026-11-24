@@ -99,6 +99,24 @@ cd Project-iTesly-docker
 
 ---
 
+## 后续补绑域名与自动申请 HTTPS 证书
+
+如果首次部署时你先选择了「暂不配置公网」或「临时打洞」，之后新买了域名想换成永久 HTTPS 地址，**不需要重装，也不会丢失任何历史数据或 Token**，按以下 3 步操作即可：
+
+1. **添加域名解析**：在域名服务商（阿里云 / 腾讯云 / Cloudflare 等）控制台添加一条 **`A` 记录**（例如主机记录填 `itesly`，记录值填你的服务器公网 IP）。
+2. **放行端口**：在云服务器安全组 / 防火墙放行 **`80`** 和 **`443`** 端口（Caddy 申请免费 SSL 证书需要用到）。
+3. **一键绑定并申请证书**：在服务器 `~/Project-iTesly-docker` 目录执行：
+
+   ```bash
+   cd ~/Project-iTesly-docker
+   ./install.sh --bind-domain itesly.你的域名
+   ```
+
+   （也可以直接运行 `./install.sh` 后选择 **`3) 后续补绑/更换域名`** 按提示输入域名。）  
+   脚本会自动生成配置并启动 Caddy，几秒内完成免费 Let's Encrypt HTTPS 证书申请（后续自动续期），然后在手机 App 里把服务地址改成 `https://itesly.你的域名` 即可（Token 保持不变）。
+
+---
+
 ## 常用运维命令
 
 安装目录默认位于 `~/Project-iTesly-docker`（进入该目录后执行）：

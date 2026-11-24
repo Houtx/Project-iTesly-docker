@@ -2,13 +2,17 @@
 # ==============================================================================
 # Project-iTesly 一键部署与接入向导
 #
-# 方案一（纯小白 VPS 一键部署 + 一键打洞）：
-#   ./install.sh                  # 交互式向导（自动装 Docker、生成密钥、可选公网打洞）
+# 方案一（纯小白 VPS 一键部署）：
+#   ./install.sh                  # 交互式向导（自动装 Docker、生成密钥、可选绑定域名）
+#   ./install.sh --cn --domain <域名>  # 非交互：中国大陆优化版 + 自动申请 HTTPS 证书
 #   ./install.sh --cn --tunnel    # 非交互：中国大陆优化版 + Cloudflare 免费打洞
 #   ./install.sh --official       # 非交互：国际官方版
 #
 # 方案二（已有 TeslaMate / 技术人员一键接入）：
 #   ./install.sh --attach <目录>  # 零侵入接入现有 TeslaMate Compose 目录
+#
+# 后续补绑/更换域名（自动申请 Let's Encrypt HTTPS 证书）：
+#   ./install.sh --bind-domain <域名>
 # ==============================================================================
 set -euo pipefail
 
@@ -51,8 +55,14 @@ while [[ $# -gt 0 ]]; do
       NON_INTERACTIVE=1
       shift 2
       ;;
+    --bind-domain)
+      MODE="bind-domain"
+      DOMAIN_NAME="${2:-}"
+      NON_INTERACTIVE=1
+      shift 2
+      ;;
     -h|--help)
-      sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -213,14 +223,67 @@ if [[ -z "$MODE" && "$NON_INTERACTIVE" -eq 0 ]]; then
   echo ""
   echo "欢迎使用 Project-iTesly 一键部署向导"
   echo "--------------------------------------------------"
-  echo "  1) 方案一：纯小白全新一键部署（新 VPS / NAS 从零装齐 + 可选一键打洞）"
+  echo "  1) 方案一：纯小白全新一键部署（新 VPS / NAS 从零装齐）"
   echo "  2) 方案二：已有 TeslaMate 一键接入（适合老用户 / 技术人员，不改动原服务）"
+  echo "  3) 后续补绑/更换域名（已部署过，现在绑定域名并自动申请 HTTPS 证书）"
   echo "--------------------------------------------------"
-  read -r -p "请选择方案 [1/2] (默认 1): " choice
+  read -r -p "请选择操作 [1/2/3] (默认 1): " choice
   case "${choice:-1}" in
     2) MODE="attach" ;;
+    3) MODE="bind-domain" ;;
     *) MODE="fresh" ;;
   esac
+fi
+
+# ==============================================================================
+# 模式 3：为已部署的方案一环境补绑/更换域名（自动申请 HTTPS 证书）
+# ==============================================================================
+if [[ "$MODE" == "bind-domain" ]]; then
+  env_file="$SCRIPT_DIR/.env"
+  [[ -f "$env_file" ]] || fatal "未找到 $env_file，请先运行 ./install.sh 完成首次部署。"
+
+  cur_compose="$(read_env_val "$env_file" COMPOSE_FILE)"
+  if [[ "$cur_compose" == *"docker-compose.attach.yml"* ]]; then
+    fatal "当前为「方案二：接入现有 TeslaMate」模式，请直接将你现有的 Nginx / Caddy 反向代理指向 127.0.0.1:8080。"
+  fi
+
+  base_compose="docker-compose.cn.yml"
+  if [[ "$cur_compose" == *"docker-compose.yml"* ]] && [[ "$cur_compose" != *"docker-compose.cn.yml"* ]]; then
+    base_compose="docker-compose.yml"
+  fi
+
+  if [[ -z "$DOMAIN_NAME" ]]; then
+    echo ""
+    echo "提示：请先在域名服务商处添加 A 记录，将该域名解析到当前服务器公网 IP，并放行 80 / 443 端口。"
+    read -r -p "请输入要绑定的域名（如 itesly.example.com，不含 https://）: " DOMAIN_NAME
+  fi
+  DOMAIN_NAME="${DOMAIN_NAME#https://}"
+  DOMAIN_NAME="${DOMAIN_NAME#http://}"
+  DOMAIN_NAME="${DOMAIN_NAME%%/*}"
+  [[ -n "$DOMAIN_NAME" ]] || fatal "域名不能为空。"
+
+  if [[ "$cur_compose" == *"docker-compose.tunnel.yml"* ]]; then
+    info "正在关闭之前的临时 Cloudflare 打洞容器..."
+    docker compose rm -sf cloudflared >/dev/null 2>&1 || true
+  fi
+
+  cat > "$SCRIPT_DIR/Caddyfile" <<EOF
+${DOMAIN_NAME} {
+    reverse_proxy itesly-api:8080
+}
+EOF
+  mkdir -p "$SCRIPT_DIR/data/caddy/data" "$SCRIPT_DIR/data/caddy/config"
+  set_env_kv "$env_file" COMPOSE_FILE "${base_compose}:docker-compose.caddy.yml"
+
+  info "正在启动 Caddy 并为 ${DOMAIN_NAME} 自动申请 HTTPS 证书..."
+  docker compose up -d caddy
+
+  api_token="$(read_env_val "$env_file" ITESLY_API_TOKEN)"
+  tm_port="$(read_env_val "$env_file" TESLAMATE_PORT)"
+  gf_port="$(read_env_val "$env_file" GRAFANA_PORT)"
+  ok "域名绑定完成！以后数据与 Token 均保持不变。"
+  print_summary "https://${DOMAIN_NAME}" "$api_token" 1 "${tm_port:-4000}" "${gf_port:-3000}" "证书由 Caddy 自动申请并续期；请确保 80/443 端口已放行"
+  exit 0
 fi
 
 # ==============================================================================
