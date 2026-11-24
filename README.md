@@ -13,7 +13,7 @@
 ## 开始前准备什么？
 
 只需要一台 **24 小时开机的设备**（三选一）：
-1. **云服务器（最省心，推荐纯小白）**：阿里云 / 腾讯云 / 海外 VPS 等，最便宜的 **2核2G（Linux Ubuntu / Debian）** 就完全够用。
+1. **轻量云服务器（最省心，强烈推荐纯小白）**：直接在阿里云 / 腾讯云购买 **中国香港、新加坡或日本** 地区的轻量应用服务器（**2核2G Ubuntu / Debian** 就完全够用，**免备案、国内直连延迟低、绑域名立即可用**）。
 2. **家用 NAS**：群晖 / 威联通 / 飞牛 fnOS / 绿联等（需支持 Docker）。
 3. **常开电脑**：家里的 Mac mini / Linux 小主机。
 
@@ -41,8 +41,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Houtx/Project-iTesly-docker/
      > - **腾讯云 / DNSPod**（国内大厂、微信支付、DNS 生效极快）：https://dnspod.cloud.tencent.com
      > - **阿里云（万网）**（国内大厂、支付宝/微信、活动域名多）：https://wanwang.aliyun.com
      > - **Cloudflare Registrar**（按成本价续费无溢价、支持支付宝）：https://dash.cloudflare.com
-     > - **Namesilo / Porkbun**（海外老牌、支持支付宝、免繁琐流程）：https://www.namesilo.com
-     > - 💡 **避坑提示**：若服务器选在**中国大陆境内**，域名访问 `80/443` 端口需按规定做 ICP 备案；若选**中国香港 / 新加坡 / 日本**等轻量服务器，买完域名解析即可直接使用，无需备案。
+     > - **Namesilo**（海外老牌、支持支付宝、免繁琐流程）：https://www.namesilo.com
+     > - 💡 **服务器选区建议**：强烈建议直接购买 **中国香港 / 新加坡 / 日本** 轻量服务器（免 ICP 备案），买完域名添加解析即可直接启用 HTTPS，无需等待备案审核。
    - **选项 2：暂不配置公网（内网直连 / Tailscale 免费组网）**  
      如果不想买域名，也可以在服务器和手机上同时安装免费的 **Tailscale** 组网（安全且不绕行海外），或者仅在家里 Wi-Fi 下使用内网 `IP:8080`。
    - **选项 3：Cloudflare 免费临时打洞（仅适合临时体验或海外 VPS）**  
