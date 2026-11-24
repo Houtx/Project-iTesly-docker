@@ -49,7 +49,7 @@ Send this repository URL to your AI coding agent (Antigravity, Claude Code, Curs
    - Attach to existing TeslaMate: `./install.sh --attach <teslamate_dir>`
    - Bind domain later: `./install.sh --bind-domain <domain>`
 2. Verify `curl -fsS http://127.0.0.1:8080/app/api/v1/service-health` returns `{"status":"ok",...}` (and `https://<domain>/app/api/v1/service-health` if a domain was bound).
-3. Return **only** the iTesly App **Server URL**, **`ITESLY_API_TOKEN`**, and the TeslaMate onboarding URL (`http://<ip>:4000`). Do not print `DATABASE_PASS` or `ENCRYPTION_KEY`.
+3. Return **only** the iTesly App **Server URL**, **`ITESLY_API_TOKEN`**, and the TeslaMate onboarding URL (`http://<ip>:4000`, reminding the user to generate tokens with Tesla Auth: https://github.com/adriankumpf/tesla_auth/releases). Do not print `DATABASE_PASS` or `ENCRYPTION_KEY`.
 
 ---
 

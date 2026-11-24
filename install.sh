@@ -205,7 +205,7 @@ print_summary() {
   if [[ "$show_teslamate" == "1" ]]; then
     echo "  【重要】首次使用请先授权 TeslaMate 开始同步爱车数据："
     echo "    网页地址： http://${host_ip}:${tm_port}"
-    echo "    操作方式： 打开后使用 Tesla Auth 工具生成 Access/Refresh Token 登录"
+    echo "    操作方式： 打开后使用 Tesla Auth (https://github.com/adriankumpf/tesla_auth/releases) 生成 Token 登录"
     echo "    Grafana 看板： http://${host_ip}:${gf_port}  (默认账号密码 admin/admin)"
     echo "----------------------------------------------------------------------"
   fi

@@ -55,7 +55,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Houtx/Project-iTesly-docker/
 
 1. **先激活数据采集（仅需一次）**：  
    用浏览器打开终端提示的 TeslaMate 网页地址 `http://你的服务器IP:4000`。  
-   > **新手提示**：TeslaMate 首次登录不是直接输账号密码，而是要填 **Access Token** 和 **Refresh Token**。你可以在手机应用商店或 GitHub 下载开源工具 **Tesla Auth**，登录一次特斯拉账号后复制两个 Token 粘贴进去即可（全程安全不泄露密码）。
+   > **新手提示**：TeslaMate 首次登录不是直接输账号密码，而是要填 **Access Token** 和 **Refresh Token**。你可以在手机应用商店搜索 **Auth app for Tesla**，或到官方开源仓库下载 **Tesla Auth**（Windows / macOS / Linux 均有桌面版：https://github.com/adriankumpf/tesla_auth/releases ），用它安全登录一次特斯拉账号后复制两个 Token 粘贴进去即可（全程不向第三方泄露密码）。
 
 2. **连接手机端 iTesly App**：  
    打开手机上的 **iTesly** App，在引导页（或 **设置 → 自建服务配置**）直接复制填入终端最后输出的：
@@ -139,7 +139,7 @@ cd Project-iTesly-docker
    - **不要**把 `.env` 中的 `DATABASE_PASS`、`ENCRYPTION_KEY`、`ITESLY_DATABASE_PASS`、`ITESLY_PUBLISH_TOKEN` 输出给用户或写入任何代码/文档。
    - 只向用户返回：
      1. 手机 iTesly App 所需的 **服务地址**（`https://<域名>` 或 `http://<IP>:8080`）与 **`ITESLY_API_TOKEN`**；
-     2. **TeslaMate 首次授权地址**（`http://<IP>:4000`），并提示用户先使用 Tesla Auth 登录一次同步车辆数据。
+     2. **TeslaMate 首次授权地址**（`http://<IP>:4000`），并提示用户使用 **Tesla Auth**（https://github.com/adriankumpf/tesla_auth/releases ）生成 Token 登录一次以同步车辆数据。
 
 ---
 
