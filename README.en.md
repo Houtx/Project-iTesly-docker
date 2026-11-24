@@ -6,37 +6,35 @@
 
 ---
 
-## Features
+## Option 1: One-Command VPS Install + Auto Tunnel (For Beginners)
 
-- **Zero-config one-click wizard (`./install.sh`)**: Automatically generates strong random secrets, creates the restricted `teslamate_app` PostgreSQL role, starts all containers, and prints the exact **Server URL** and **API Token** to paste into your phone.
-- **Two deployment modes**:
-  1. **Fresh Install**: Deploys TeslaMate + PostgreSQL 18 + Grafana + Mosquitto + iTesly API in one command.
-  2. **Attach to Existing TeslaMate**: Zero-downtime integration with your existing TeslaMate Compose directory without restarting TeslaMate or PostgreSQL.
-- **Live OTA Update Alerts**: Automatically subscribes to TeslaMate's Mosquitto MQTT `update_available` / `update_version` topics so the iTesly home screen shows pending OTA badges.
-- **Least-Privilege Security**: Mobile clients never store Tesla OAuth credentials or connect directly to PostgreSQL/MQTT.
+No `git` or Docker pre-installation required. Paste this single command into your Linux VPS / macOS terminal:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Houtx/Project-iTesly-docker/main/start.sh)
+```
+
+The interactive wizard will:
+1. Install Docker automatically (on Linux) if missing.
+2. Deploy **TeslaMate + PostgreSQL 18 + Grafana + Mosquitto + iTesly API** with auto-generated strong secrets and the least-privilege `teslamate_app` database role.
+3. Optionally expose your API over HTTPS automatically via **Cloudflare Quick Tunnel** (`https://xxx.trycloudflare.com`, zero domain needed) or **Caddy automatic HTTPS** (with your own domain).
+4. Print the exact **Server URL** and **API Token** to paste into the **iTesly** mobile app.
 
 ---
 
-## Quick Start
+## Option 2: Attach to Existing TeslaMate / Advanced Setup
 
-### 1. Clone & Run the Wizard
+If you already run TeslaMate, attach `itesly-api` without restarting your existing stack:
 
 ```bash
 git clone https://github.com/Houtx/Project-iTesly-docker.git
 cd Project-iTesly-docker
-./install.sh
+./install.sh --attach /path/to/your/teslamate
 ```
 
-Non-interactive shortcuts:
-- Fresh install (Official TeslaMate + Grafana): `./install.sh --official`
-- Fresh install (China-optimized Chinese Grafana): `./install.sh --cn`
-- Attach to an existing TeslaMate directory: `./install.sh --attach /path/to/teslamate`
-
-### 2. Connect the iTesly Mobile App
-
-Once `./install.sh` finishes, copy the printed **Server URL** (e.g. `http://192.168.1.10:8080` or your HTTPS reverse-proxy URL) and **API Token** (`ITESLY_API_TOKEN`) into the **iTesly** app onboarding screen (or **Settings → Self-Hosted Server**).
-
-For fresh installs, open `http://<server-ip>:4000` once to sign in to TeslaMate with your Tesla account.
+Non-interactive flags for fresh installs:
+- `./install.sh --official --tunnel` (Official TeslaMate + Cloudflare Quick Tunnel)
+- `./install.sh --cn --domain itesly.example.com` (Chinese Grafana + Caddy HTTPS)
 
 ---
 

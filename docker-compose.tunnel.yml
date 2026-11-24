@@ -1,0 +1,9 @@
+# Cloudflare 免费一键打洞（无需域名，生成临时 https://xxx.trycloudflare.com 公网地址）
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://itesly-api:8080
+    depends_on:
+      itesly-api:
+        condition: service_healthy

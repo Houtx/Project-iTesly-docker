@@ -1,0 +1,15 @@
+# 自有域名自动 HTTPS（Caddy 自动申请并续期 Let's Encrypt 证书）
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy/data:/data
+      - ./data/caddy/config:/config
+    depends_on:
+      itesly-api:
+        condition: service_healthy

@@ -2,100 +2,113 @@
 
 # Project-iTesly 一键部署脚本
 
-> 专为 **iTesly** 移动端（iOS / Android）打造的 **TeslaMate + iTesly API** 傻瓜式 Docker Compose 一键部署仓库。
+> 专为 **iTesly** 手机 App（iOS / Android）打造的 **TeslaMate + 服务端** 傻瓜式 Docker 部署工具。
 >
-> 无需懂代码、无需手动配数据库权限、无需修改配置文件，**两条命令即可完成全部服务端搭建并直接在终端生成 App 连接信息**。
+> **两种方案自由选择**：
+> - **方案一（纯小白专用）**：刚买了一台空白服务器（VPS），只需粘贴 **1 条命令**，自动装好 Docker、部署全套服务、**一键公网打洞生成 `https://` 地址**并直接生成手机 App 所需的 **Token**。
+> - **方案二（老用户 / 技术人员专用）**：已经装过 TeslaMate，零侵入一键接入现有数据库与 MQTT（不重启原有服务），或自行定制 Docker Compose。
 
 ---
 
-## 为什么选择本部署方案？
+## 开始前准备什么？
 
-- **真正一键开箱即用**：自动生成全部随机强密码、自动初始化 PostgreSQL 只读权限角色 `teslamate_app`、自动拉起所有容器并打印手机端所需地址与 Token。
-- **支持两种人群**：
-  1. **从未装过 TeslaMate 的新用户**：一键装齐 TeslaMate + PostgreSQL + Grafana + Mosquitto + iTesly API。
-  2. **已经装好 TeslaMate 的老用户**：零侵入接入现有 TeslaMate 网络与数据库，**不重启、不修改原有 TeslaMate**。
-- **开箱支持车机 OTA 推送提醒**：内置连接 Mosquitto MQTT，iTesly App 首页「系统信息」可直接亮起「新版本推送」与「OTA 升级中」状态徽标。
-- **安全隔离**：iTesly 移动端全程不接触你的 Tesla 账号与车控权限，后端仅使用只读数据库角色（仅额外允许记录充电电费）。
-- **双版本可选**：提供**中国大陆优化版**（预置中文 Grafana 仪表盘 + 默认 `Asia/Shanghai` 时区）与**国际官方版**。
+只需要一台 **24 小时开机的设备**（三选一）：
+1. **云服务器（最省心，推荐纯小白）**：阿里云 / 腾讯云 / 海外 VPS 等，最便宜的 **2核2G（Linux Ubuntu / Debian）** 就完全够用。
+2. **家用 NAS**：群晖 / 威联通 / 飞牛 fnOS / 绿联等（需支持 Docker）。
+3. **常开电脑**：家里的 Mac mini / Linux 小主机。
+
+> **如何打开服务器终端？**
+> 云服务器购买后，在控制台点击 **「远程连接 / WebShell 登录」** 即可打开黑色命令行窗口；Mac 打开自带的「终端」，Windows 打开 PowerShell 输入 `ssh root@你的服务器IP`。
 
 ---
 
-## 一分钟极速部署（小白推荐）
+## 方案一：纯小白一键部署 + 一键打洞（推荐）
 
-### 前提条件
-一台安装好 **Docker** 与 **Docker Compose** 的设备即可（Linux 云服务器、群晖 Synology、威联通 QNAP、飞牛 fnOS、绿联 NAS 或 Mac 均可）。
+不需要懂 Docker，不需要提前装 `git`，在服务器终端里直接复制粘贴下面 **这一行命令** 回车即可：
 
-> 若是全新 Linux 服务器还没装 Docker，先运行：
-> ```bash
-> curl -fsSL https://get.docker.com | sh
-> ```
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Houtx/Project-iTesly-docker/main/start.sh)
+```
 
-### 第一步：下载部署脚本并运行向导
+脚本会用中文一步一步引导你（不知道怎么选时，**一路按回车默认即可**）：
+
+1. **自动安装环境**：如果服务器还没装 Docker，脚本会自动帮你装好。
+2. **选择方案与看板**：默认选择「方案一（全新部署）→ 中国大陆优化版（内置中文 Grafana 看板）」。
+3. **选择公网打洞方式（让手机出门用 5G 也能随时看车）**：
+   - **选项 1：Cloudflare 免费一键打洞（默认，零域名直接用）**  
+     自动打洞并生成一个公网 `https://xxxx.trycloudflare.com` 地址，马上就能填进手机 App（注意：如果以后重启容器，临时地址会变化；长期稳定使用推荐选项 2）。
+   - **选项 2：绑定你自己的域名（自动申请永久 HTTPS 证书）**  
+     输入你的域名（需提前在域名控制台把 A 记录解析到当前服务器公网 IP），脚本自动通过 Caddy 申请免费 HTTPS 证书并配置好 `https://你的域名`。
+   - **选项 3：暂不打洞**  
+     仅输出服务器 `IP:8080`（适合仅在家里 Wi-Fi 使用，或自己用 Tailscale / 已有 Nginx 反代）。
+
+### 部署完成后，只需做最后两步：
+
+脚本结束时，屏幕上会直接打印一个清晰的方框，包含你需要的所有地址和 Token：
+
+1. **先激活数据采集（仅需一次）**：  
+   用浏览器打开终端提示的 TeslaMate 网页地址 `http://你的服务器IP:4000`。  
+   > **新手提示**：TeslaMate 首次登录不是直接输账号密码，而是要填 **Access Token** 和 **Refresh Token**。你可以在手机应用商店或 GitHub 下载开源工具 **Tesla Auth**，登录一次特斯拉账号后复制两个 Token 粘贴进去即可（全程安全不泄露密码）。
+
+2. **连接手机端 iTesly App**：  
+   打开手机上的 **iTesly** App，在引导页（或 **设置 → 自建服务配置**）直接复制填入终端最后输出的：
+   - **服务地址**：例如 `https://xxxx.trycloudflare.com` 或 `https://你的域名`
+   - **访问令牌**：终端生成的那一长串随机 `Token`
+
+点击保存并连接，就能在手机上实时看到爱车状态、轨迹热力图与 OTA 新版本提醒了！
+
+---
+
+## 方案二：已有 TeslaMate / 技术人员接入
+
+如果你已经在服务器上跑着 TeslaMate，或者习惯自己管理反代与 Compose 编排，可以用以下任意一种方式接入：
+
+### 2.1 一键零侵入接入（推荐老用户）
+
+在现有 TeslaMate 宿主机执行：
 
 ```bash
 git clone https://github.com/Houtx/Project-iTesly-docker.git
 cd Project-iTesly-docker
-./install.sh
+./install.sh --attach /你的/teslamate/目录
 ```
 
-按屏幕提示输入数字选择即可（一路回车默认选择 **全新部署 → 中国大陆优化版**）：
+脚本会自动完成以下操作，且**不会重启或修改你原有的 TeslaMate、PostgreSQL 与 Grafana**：
+1. 自动探测现有 `database` 容器名、Docker 网络名与 `mosquitto` 容器；
+2. 在现有 `.env` 中安全生成 `ITESLY_DATABASE_PASS`、`ITESLY_API_TOKEN`、`ITESLY_PUBLISH_TOKEN`；
+3. 自动执行 [`init_readonly.sql`](init_readonly.sql) 创建最小权限只读角色 `teslamate_app`；
+4. 仅启动 `itesly-api`（`ghcr.io/houtx/itesly-api:latest`）并加入现有网络，同时自动连接 `mosquitto` 点亮车机 OTA 新版本提醒。
 
-- **模式 1（全新部署）**：适合还没装过 TeslaMate 的用户。脚本会自动拉取镜像、生成随机密码、初始化只读数据库并启动全部服务。
-- **模式 2（接入现有 TeslaMate）**：适合已经跑着 TeslaMate 的老用户。输入你原来的 TeslaMate 目录路径，脚本会自动探测数据库容器、网络和 Mosquitto，一键启动 `itesly-api`。
+### 2.2 纯手动 Compose 部署
 
-> **非交互静默命令**（可选）：
-> - 全新部署中国大陆优化版：`./install.sh --cn`
-> - 全新部署国际官方版：`./install.sh --official`
-> - 接入已有 TeslaMate 目录：`./install.sh --attach /你的/teslamate/目录`
+仓库内提供三套清晰模板，可按需自行编排：
+- [`docker-compose.cn.yml`](docker-compose.cn.yml)：完整栈（TeslaMate + Postgres 18 + 中文 Grafana + Mosquitto + iTesly API）
+- [`docker-compose.yml`](docker-compose.yml)：完整栈（TeslaMate + 官方 Grafana）
+- [`docker-compose.attach.yml`](docker-compose.attach.yml)：仅 `itesly-api` 容器（连接外部已有 `teslamate` 网络）
+- [`docker-compose.tunnel.yml`](docker-compose.tunnel.yml) / [`docker-compose.caddy.yml`](docker-compose.caddy.yml)：可叠加的公网打洞 / 自动 HTTPS 模块
+- [`.env.example`](.env.example)：全部环境变量说明
 
-### 第二步：查看终端输出的连接信息
+非交互静默安装参数示例：
+```bash
+# 全新部署（中国优化版）+ Cloudflare 打洞
+./install.sh --cn --tunnel
 
-部署完成后，终端会直接打印类似如下信息：
-
-```text
-======================================================================
-  Project-iTesly 后端部署成功！请打开手机 iTesly App 按下方信息填写：
-======================================================================
-  1. 服务地址（局域网）： http://192.168.1.10:8080
-     （如配置了 HTTPS 域名反代，请改为 https://你的域名）
-  2. 访问令牌（Token）： <自动生成的 64 位随机令牌>
-----------------------------------------------------------------------
-  TeslaMate 网页后台：   http://192.168.1.10:4000
-  （首次使用请先打开上方地址，登录一次 Tesla 账号以开始同步车辆数据）
-  Grafana 数据看板：     http://192.168.1.10:3000  (默认账号密码 admin/admin)
-======================================================================
+# 全新部署（中国优化版）+ 绑定自有域名
+./install.sh --cn --domain itesly.example.com
 ```
-
-### 第三步：连接手机端 iTesly App
-
-1. **全新部署用户**：先在电脑/手机浏览器打开 `http://<你的服务器IP>:4000`，使用 Tesla 账号完成一次授权登录（之后 TeslaMate 会自动在后台记录行车与充电数据）。
-2. 打开手机上的 **iTesly** App（首次进入在引导页，或已进入演示模式后前往 **「设置 → 自建服务配置」**）：
-   - **服务地址**：填入 `http://<你的服务器IP>:8080`（如已配置公网 HTTPS 反代，则填 `https://你的域名`）
-   - **访问令牌**：复制粘贴终端打印的 `ITESLY_API_TOKEN`
-3. 点击保存并连接，即可看到自己的爱车数据！
-
----
-
-## 公网远程访问建议（出门也能看车）
-
-- **家庭局域网 / 组网用户（最简单）**：使用 Tailscale / ZeroTier / WireGuard 异地组网，App 始终填写内网/组网 IP `http://100.x.x.x:8080` 即可，无需域名和公网 IP，安全且零成本。
-- **有域名/云服务器用户（HTTPS 反代）**：建议使用 Caddy、Nginx 或 Cloudflare Tunnel 将公网 `https://itesly.你的域名` 反向代理到本机 `http://127.0.0.1:8080`。
-  - Caddy 极简示例（自动申请 HTTPS 证书）：
-    ```caddyfile
-    itesly.example.com {
-        reverse_proxy 127.0.0.1:8080
-    }
-    ```
 
 ---
 
 ## 常用运维命令
 
+安装目录默认位于 `~/Project-iTesly-docker`（进入该目录后执行）：
+
 | 操作 | 命令 |
 | :--- | :--- |
-| 查看所有容器运行状态 | `docker compose ps`（中国优化版加 `-f docker-compose.cn.yml`） |
-| 更新后端到最新版本 | `docker compose pull itesly-api && docker compose up -d itesly-api` |
-| 查看 iTesly API 运行日志 | `docker compose logs -f itesly-api` |
+| 查看所有容器运行状态 | `docker compose ps` |
+| 更新后端镜像到最新版 | `docker compose pull itesly-api && docker compose up -d itesly-api` |
+| 查看 iTesly API 日志 | `docker compose logs -f itesly-api` |
+| 查看临时打洞公网地址 | `docker compose logs cloudflared \| grep trycloudflare.com` |
 | 忘记 Token？随时查看 | `grep ITESLY_API_TOKEN .env` |
 | 检查后端健康状态 | `curl http://127.0.0.1:8080/app/api/v1/service-health` |
 
@@ -103,19 +116,17 @@ cd Project-iTesly-docker
 
 ## 常见问题（FAQ）
 
-1. **App 提示「无法连接服务器」怎么办？**
-   - 检查手机和服务器是否在同一局域网，或服务器防火墙 / 云厂商安全组是否放行了 `8080` 端口。
-   - iOS 首次连接局域网 HTTP 地址时，请在系统弹窗中点击**「允许访问本地网络」**。
-   - 若通过公网域名访问，请使用 `https://`（iOS/Android 默认限制公网明文 HTTP）。
+1. **为什么我在家连 Wi-Fi 能用，出门开 5G 就连不上了？**  
+   因为 `http://192.168.x.x:8080` 是家里局域网地址，离开家就访问不到。请在安装时选择 **「选项 1：Cloudflare 打洞」** 或 **「选项 2：绑定自己的域名」**，或者在服务器和手机上同时安装 **Tailscale** 免费组网（填写 Tailscale 分配的 `100.x.x.x:8080`）。
 
-2. **已有 TeslaMate 用户接入后，会不会影响原来的数据和 Grafana？**
-   - 不会。脚本仅向现有数据库新增一个最小权限的 `teslamate_app` 只读账号，并独立启动 `itesly-api` 容器加入同一网络，**不会重启或修改你原有的 TeslaMate、PostgreSQL 与 Grafana**。
+2. **安全吗？你们的脚本会不会拿到我的特斯拉账号密码？**  
+   **绝对不会**。所有数据全部保存在你自己的服务器里；iTesly 移动端和 `itesly-api` 后端全程不接触特斯拉账号密码，后端连接数据库使用的也是最低权限只读角色（[`init_readonly.sql`](init_readonly.sql) 仅开放全库 `SELECT` 与充电费用 `cost` 单列修改权限）。
 
-3. **首页「系统信息」什么时候会显示新版本 OTA 提醒？**
-   - 只要部署时启用了内置 `mosquitto`（默认已开启），当你的车辆收到官方 OTA 推送时，TeslaMate 会将 `update_available` 与 `update_version` 写入 MQTT，iTesly API 自动读取并在 App 首页高亮显示 `新版本 x.y.z`。
+3. **首页「系统信息」什么时候会显示新版本 OTA 提醒？**  
+   只要启用了内置 `mosquitto`（默认已自动接入），当车辆收到官方 OTA 推送时，TeslaMate 会自动推送至 MQTT，App 首页会高亮显示 `新版本 x.y.z` 徽标。
 
-4. **端口 `8080` / `4000` / `3000` 被占用了怎么办？**
-   - 修改当前目录 `.env` 文件里的 `ITESLY_API_PORT`、`TESLAMATE_PORT`、`GRAFANA_PORT`，然后重新执行 `docker compose up -d` 即可。
+4. **端口冲突（`8080` / `4000` / `3000` 被占用）怎么办？**  
+   打开 `.env` 修改 `ITESLY_API_PORT`、`TESLAMATE_PORT` 或 `GRAFANA_PORT`，然后执行 `docker compose up -d` 即可生效。
 
 ---
 

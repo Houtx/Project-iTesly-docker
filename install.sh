@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Project-iTesly 一键部署 / 接入向导（适用于 Linux / macOS / 群晖 / 威联通 NAS）
+# Project-iTesly 一键部署与接入向导
 #
-# 用法：
-#   ./install.sh                  # 交互式傻瓜向导
-#   ./install.sh --cn             # 非交互：直接全新部署（中国大陆优化版）
-#   ./install.sh --official       # 非交互：直接全新部署（国际官方版）
-#   ./install.sh --attach <目录>  # 非交互：接入已有 TeslaMate 目录
+# 方案一（纯小白 VPS 一键部署 + 一键打洞）：
+#   ./install.sh                  # 交互式向导（自动装 Docker、生成密钥、可选公网打洞）
+#   ./install.sh --cn --tunnel    # 非交互：中国大陆优化版 + Cloudflare 免费打洞
+#   ./install.sh --official       # 非交互：国际官方版
+#
+# 方案二（已有 TeslaMate / 技术人员一键接入）：
+#   ./install.sh --attach <目录>  # 零侵入接入现有 TeslaMate Compose 目录
 # ==============================================================================
 set -euo pipefail
 
@@ -15,6 +17,8 @@ cd "$SCRIPT_DIR"
 
 MODE=""
 EDITION="cn"
+ACCESS_MODE=""
+DOMAIN_NAME=""
 TESLAMATE_DIR=""
 NON_INTERACTIVE=0
 
@@ -32,6 +36,15 @@ while [[ $# -gt 0 ]]; do
       NON_INTERACTIVE=1
       shift
       ;;
+    --tunnel)
+      ACCESS_MODE="tunnel"
+      shift
+      ;;
+    --domain)
+      ACCESS_MODE="domain"
+      DOMAIN_NAME="${2:-}"
+      shift 2
+      ;;
     --attach)
       MODE="attach"
       TESLAMATE_DIR="${2:-}"
@@ -39,7 +52,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -54,13 +67,34 @@ ok()    { printf '\033[1;32m[完成]\033[0m %s\n' "$*"; }
 warn()  { printf '\033[1;33m[提示]\033[0m %s\n' "$*"; }
 fatal() { printf '\033[1;31m[错误]\033[0m %s\n' "$*" >&2; exit 1; }
 
-if ! command -v docker >/dev/null 2>&1; then
-  fatal "未检测到 Docker，请先安装 Docker（Linux 可执行 curl -fsSL https://get.docker.com | sh）。"
-fi
+ensure_docker() {
+  if ! command -v docker >/dev/null 2>&1; then
+    if [[ "$(uname -s)" == "Linux" ]]; then
+      if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
+        read -r -p "未检测到 Docker，是否自动一键安装 Docker？[Y/n] (默认 Y): " install_dk
+        if [[ "${install_dk:-Y}" =~ ^[Nn]$ ]]; then
+          fatal "请先安装 Docker 后再运行本脚本。"
+        fi
+      fi
+      info "正在自动安装 Docker（Linux 官方脚本）..."
+      if [[ "$(id -u)" -eq 0 ]]; then
+        curl -fsSL https://get.docker.com | sh
+        systemctl enable --now docker >/dev/null 2>&1 || service docker start >/dev/null 2>&1 || true
+      elif command -v sudo >/dev/null 2>&1; then
+        curl -fsSL https://get.docker.com | sudo sh
+        sudo systemctl enable --now docker >/dev/null 2>&1 || true
+      else
+        fatal "需要 root 或 sudo 权限来自动安装 Docker。"
+      fi
+    else
+      fatal "未检测到 Docker，请先安装 Docker Desktop（https://www.docker.com/）。"
+    fi
+  fi
 
-if ! docker compose version >/dev/null 2>&1; then
-  fatal "未检测到 Docker Compose V2（docker compose），请升级 Docker 或安装 compose 插件。"
-fi
+  if ! docker compose version >/dev/null 2>&1; then
+    fatal "未检测到 Docker Compose V2（docker compose），请升级 Docker 或安装 compose 插件。"
+  fi
+}
 
 gen_hex() {
   if command -v openssl >/dev/null 2>&1; then
@@ -85,6 +119,22 @@ upsert_env() {
   printf '%s=%s\n' "$key" "$val" >> "$file"
 }
 
+set_env_kv() {
+  local file="$1" key="$2" val="$3"
+  touch "$file"
+  if grep -q "^${key}=" "$file"; then
+    sed -i.bak "s|^${key}=.*|${key}=${val}|" "$file" && rm -f "${file}.bak"
+  else
+    printf '%s=%s\n' "$key" "$val" >> "$file"
+  fi
+}
+
+detect_public_ip() {
+  curl -fsS --max-time 4 https://api.ipify.org 2>/dev/null \
+    || curl -fsS --max-time 4 https://ifconfig.me 2>/dev/null \
+    || true
+}
+
 detect_lan_ip() {
   local ip=""
   if command -v ipconfig >/dev/null 2>&1; then
@@ -92,9 +142,6 @@ detect_lan_ip() {
   fi
   if [[ -z "$ip" ]] && command -v hostname >/dev/null 2>&1; then
     ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
-  fi
-  if [[ -z "$ip" ]]; then
-    ip="<你的服务器IP>"
   fi
   printf '%s' "$ip"
 }
@@ -111,51 +158,78 @@ wait_api_health() {
   warn "服务仍在启动中，可稍后执行 docker compose logs -f itesly-api 查看日志。"
 }
 
+wait_tunnel_url() {
+  info "正在等待 Cloudflare 分配免费公网 HTTPS 地址（约 5~15 秒）..."
+  local url=""
+  for _ in $(seq 1 20); do
+    url="$(docker compose logs cloudflared 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -n 1 || true)"
+    if [[ -n "$url" ]]; then
+      printf '%s' "$url"
+      return 0
+    fi
+    sleep 2
+  done
+  printf ''
+}
+
 print_summary() {
-  local api_port="$1" api_token="$2" show_teslamate="${3:-1}"
-  local tm_port="$4" gf_port="$5"
-  local lan_ip
-  lan_ip="$(detect_lan_ip)"
+  local api_url="$1" api_token="$2" show_teslamate="${3:-1}"
+  local tm_port="$4" gf_port="$5" extra_note="${6:-}"
+  local host_ip
+  host_ip="$(detect_public_ip)"
+  if [[ -z "$host_ip" ]]; then
+    host_ip="$(detect_lan_ip)"
+  fi
+  host_ip="${host_ip:-<你的服务器IP>}"
 
   echo ""
   echo "======================================================================"
-  echo "  Project-iTesly 后端部署成功！请打开手机 iTesly App 按下方信息填写："
+  echo "  Project-iTesly 部署成功！请打开手机 iTesly App 填入以下两项："
   echo "======================================================================"
-  echo "  1. 服务地址（局域网）： http://${lan_ip}:${api_port}"
-  echo "     （如配置了 HTTPS 域名反代，请改为 https://你的域名）"
-  echo "  2. 访问令牌（Token）： ${api_token}"
+  echo "  1. 服务地址： ${api_url}"
+  echo "  2. 访问令牌： ${api_token}"
+  if [[ -n "$extra_note" ]]; then
+    echo "  说明：        ${extra_note}"
+  fi
   echo "----------------------------------------------------------------------"
   if [[ "$show_teslamate" == "1" ]]; then
-    echo "  TeslaMate 网页后台：   http://${lan_ip}:${tm_port}"
-    echo "  （首次使用请先打开上方地址，登录一次 Tesla 账号以开始同步车辆数据）"
-    echo "  Grafana 数据看板：     http://${lan_ip}:${gf_port}  (默认账号密码 admin/admin)"
+    echo "  【重要】首次使用请先授权 TeslaMate 开始同步爱车数据："
+    echo "    网页地址： http://${host_ip}:${tm_port}"
+    echo "    操作方式： 打开后使用 Tesla Auth 工具生成 Access/Refresh Token 登录"
+    echo "    Grafana 看板： http://${host_ip}:${gf_port}  (默认账号密码 admin/admin)"
     echo "----------------------------------------------------------------------"
   fi
-  echo "  常用命令："
-  echo "    查看状态： docker compose ps"
-  echo "    更新镜像： docker compose pull && docker compose up -d"
+  echo "  常用运维命令（在 $SCRIPT_DIR 目录执行）："
+  echo "    查看运行状态： docker compose ps"
+  echo "    查看实时日志： docker compose logs -f itesly-api"
+  echo "    更新到最新版： docker compose pull && docker compose up -d"
   echo "======================================================================"
   echo ""
 }
+
+ensure_docker
 
 if [[ -z "$MODE" && "$NON_INTERACTIVE" -eq 0 ]]; then
   echo ""
   echo "欢迎使用 Project-iTesly 一键部署向导"
   echo "--------------------------------------------------"
-  echo "  1) 全新部署（我还没有安装过 TeslaMate，帮我一键装齐）"
-  echo "  2) 接入现有（我已经装好 TeslaMate，只需接入 iTesly 手机端后端）"
+  echo "  1) 方案一：纯小白全新一键部署（新 VPS / NAS 从零装齐 + 可选一键打洞）"
+  echo "  2) 方案二：已有 TeslaMate 一键接入（适合老用户 / 技术人员，不改动原服务）"
   echo "--------------------------------------------------"
-  read -r -p "请选择模式 [1/2] (默认 1): " choice
+  read -r -p "请选择方案 [1/2] (默认 1): " choice
   case "${choice:-1}" in
     2) MODE="attach" ;;
     *) MODE="fresh" ;;
   esac
 fi
 
+# ==============================================================================
+# 方案一：纯小白全新一键部署 + 可选一键公网打洞
+# ==============================================================================
 if [[ "$MODE" == "fresh" ]]; then
   if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
     echo ""
-    echo "请选择镜像版本："
+    echo "步骤 1/2：请选择镜像版本"
     echo "  1) 中国大陆优化版（推荐：预置中文 Grafana 看板 + 默认 Asia/Shanghai）"
     echo "  2) 国际官方版（TeslaMate + Grafana 官方原版）"
     read -r -p "请选择版本 [1/2] (默认 1): " ed_choice
@@ -165,25 +239,59 @@ if [[ "$MODE" == "fresh" ]]; then
     esac
   fi
 
-  compose_file="docker-compose.yml"
-  [[ "$EDITION" == "cn" ]] && compose_file="docker-compose.cn.yml"
+  if [[ -z "$ACCESS_MODE" ]]; then
+    if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
+      echo ""
+      echo "步骤 2/2：请选择公网访问 / 一键打洞方式（手机出门用 5G 也能连）"
+      echo "  1) Cloudflare 免费一键打洞（无需域名、立即可得 https://xxx.trycloudflare.com，推荐体验）"
+      echo "  2) 绑定自己的域名（Caddy 自动申请永久 HTTPS 证书，需提前把域名解析到本机 IP）"
+      echo "  3) 暂不打洞（仅用服务器 IP:8080，或自行用 Tailscale / 已有反代）"
+      read -r -p "请选择 [1/2/3] (默认 1): " acc_choice
+      case "${acc_choice:-1}" in
+        2) ACCESS_MODE="domain" ;;
+        3) ACCESS_MODE="direct" ;;
+        *) ACCESS_MODE="tunnel" ;;
+      esac
+    else
+      ACCESS_MODE="direct"
+    fi
+  fi
+
+  if [[ "$ACCESS_MODE" == "domain" && -z "$DOMAIN_NAME" ]]; then
+    read -r -p "请输入你的域名（例如 itesly.example.com，不含 https://）: " DOMAIN_NAME
+    DOMAIN_NAME="${DOMAIN_NAME#https://}"
+    DOMAIN_NAME="${DOMAIN_NAME#http://}"
+    DOMAIN_NAME="${DOMAIN_NAME%%/*}"
+    [[ -n "$DOMAIN_NAME" ]] || fatal "域名不能为空。"
+  fi
+
+  base_compose="docker-compose.yml"
+  [[ "$EDITION" == "cn" ]] && base_compose="docker-compose.cn.yml"
+
+  compose_files="$base_compose"
+  if [[ "$ACCESS_MODE" == "tunnel" ]]; then
+    compose_files="${base_compose}:docker-compose.tunnel.yml"
+  elif [[ "$ACCESS_MODE" == "domain" ]]; then
+    compose_files="${base_compose}:docker-compose.caddy.yml"
+    cat > "$SCRIPT_DIR/Caddyfile" <<EOF
+${DOMAIN_NAME} {
+    reverse_proxy itesly-api:8080
+}
+EOF
+    mkdir -p data/caddy/data data/caddy/config
+  fi
 
   env_file="$SCRIPT_DIR/.env"
   if [[ ! -f "$env_file" ]]; then
     cp "$SCRIPT_DIR/.env.example" "$env_file"
   fi
 
-  # 自动替换占位符或补全随机强密钥
   replace_placeholder_or_set() {
     local key="$1" val="$2"
     local cur
     cur="$(read_env_val "$env_file" "$key")"
     if [[ -z "$cur" || "$cur" == replace-with-* ]]; then
-      if grep -q "^${key}=" "$env_file"; then
-        sed -i.bak "s|^${key}=.*|${key}=${val}|" "$env_file" && rm -f "${env_file}.bak"
-      else
-        printf '%s=%s\n' "$key" "$val" >> "$env_file"
-      fi
+      set_env_kv "$env_file" "$key" "$val"
     fi
   }
 
@@ -192,15 +300,16 @@ if [[ "$MODE" == "fresh" ]]; then
   replace_placeholder_or_set ITESLY_DATABASE_PASS "$(gen_hex)"
   replace_placeholder_or_set ITESLY_API_TOKEN "$(gen_hex)"
   replace_placeholder_or_set ITESLY_PUBLISH_TOKEN "$(gen_hex)"
+  set_env_kv "$env_file" COMPOSE_FILE "$compose_files"
   chmod 600 "$env_file"
 
   mkdir -p import releases data/postgres data/grafana data/mosquitto/config data/mosquitto/data data/mosquitto/log
 
-  info "正在使用 $compose_file 拉取并启动数据库..."
-  docker compose -f "$compose_file" up -d database
+  info "正在拉取镜像并启动数据库..."
+  docker compose up -d database
   info "等待 PostgreSQL 就绪..."
   for _ in $(seq 1 30); do
-    if docker compose -f "$compose_file" exec -T database pg_isready -U teslamate -d teslamate >/dev/null 2>&1; then
+    if docker compose exec -T database pg_isready -U teslamate -d teslamate >/dev/null 2>&1; then
       break
     fi
     sleep 2
@@ -208,11 +317,11 @@ if [[ "$MODE" == "fresh" ]]; then
 
   itesly_db_pass="$(read_env_val "$env_file" ITESLY_DATABASE_PASS)"
   info "正在初始化只读数据库角色 teslamate_app..."
-  docker compose -f "$compose_file" exec -T database psql -U teslamate -d teslamate \
+  docker compose exec -T database psql -U teslamate -d teslamate \
     -v ON_ERROR_STOP=1 -v app_password="$itesly_db_pass" < "$SCRIPT_DIR/init_readonly.sql" >/dev/null
 
-  info "正在启动全部服务（TeslaMate + Grafana + Mosquitto + iTesly API）..."
-  docker compose -f "$compose_file" up -d
+  info "正在启动全部服务..."
+  docker compose up -d
 
   api_port="$(read_env_val "$env_file" ITESLY_API_PORT)"
   api_port="${api_port:-8080}"
@@ -223,13 +332,34 @@ if [[ "$MODE" == "fresh" ]]; then
   api_token="$(read_env_val "$env_file" ITESLY_API_TOKEN)"
 
   wait_api_health "$api_port"
+
+  final_url=""
+  extra_note=""
+  if [[ "$ACCESS_MODE" == "tunnel" ]]; then
+    final_url="$(wait_tunnel_url)"
+    if [[ -z "$final_url" ]]; then
+      final_url="请执行 docker compose logs cloudflared 查看 trycloudflare.com 地址"
+    else
+      extra_note="Cloudflare 临时免费打洞地址；若容器重启域名会变化（长期稳定建议绑定自有域名）"
+    fi
+  elif [[ "$ACCESS_MODE" == "domain" ]]; then
+    final_url="https://${DOMAIN_NAME}"
+    extra_note="请确保云服务器防火墙已放行 80 和 443 端口"
+  else
+    pub_ip="$(detect_public_ip)"
+    lan_ip="$(detect_lan_ip)"
+    shown_ip="${pub_ip:-${lan_ip:-<你的服务器IP>}}"
+    final_url="http://${shown_ip}:${api_port}"
+    extra_note="若公网使用请搭配 HTTPS 反代或 Tailscale 组网"
+  fi
+
   ok "全新部署完成！"
-  print_summary "$api_port" "$api_token" 1 "$tm_port" "$gf_port"
+  print_summary "$final_url" "$api_token" 1 "$tm_port" "$gf_port" "$extra_note"
   exit 0
 fi
 
 # ==============================================================================
-# 模式 2：接入已有 TeslaMate 栈（零侵入，不重启原有 TeslaMate 与数据库）
+# 方案二：已有 TeslaMate 一键接入（零侵入，不重启原有 TeslaMate 与数据库）
 # ==============================================================================
 if [[ -z "$TESLAMATE_DIR" && "$NON_INTERACTIVE" -eq 0 ]]; then
   read -r -p "请输入现有 TeslaMate 目录路径（包含 docker-compose.yml 和 .env）: " TESLAMATE_DIR
@@ -279,6 +409,7 @@ fi
 
 local_env="$SCRIPT_DIR/.env"
 cat > "$local_env" <<EOF
+COMPOSE_FILE=docker-compose.attach.yml
 ITESLY_DB_HOST=database
 ITESLY_DB_PORT=5432
 ITESLY_DB_NAME=$db_name
@@ -296,8 +427,11 @@ chmod 600 "$local_env"
 mkdir -p "$SCRIPT_DIR/releases"
 
 info "正在启动 itesly-api 并接入现有网络 ($tm_network)..."
-docker compose -f "$SCRIPT_DIR/docker-compose.attach.yml" up -d
+docker compose up -d
 
 wait_api_health 8080
+pub_ip="$(detect_public_ip)"
+lan_ip="$(detect_lan_ip)"
+shown_ip="${pub_ip:-${lan_ip:-<你的服务器IP>}}"
 ok "已成功接入现有 TeslaMate！"
-print_summary 8080 "$api_token" 0 4000 3000
+print_summary "http://${shown_ip}:8080" "$api_token" 0 4000 3000 "如需公网 HTTPS，请将现有反代（Nginx/Caddy/Cloudflare）指向 127.0.0.1:8080"
