@@ -374,11 +374,19 @@ EOF
 
   mkdir -p import releases data/postgres data/grafana data/mosquitto/config data/mosquitto/data data/mosquitto/log
 
-  info "正在拉取镜像并启动数据库..."
-  docker compose up -d database
+  info "正在拉取镜像并启动基础服务（数据库、TeslaMate、MQTT、Grafana）..."
+  docker compose up -d database mosquitto teslamate grafana
   info "等待 PostgreSQL 就绪..."
   for _ in $(seq 1 30); do
     if docker compose exec -T database pg_isready -U teslamate -d teslamate >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
+
+  info "等待 TeslaMate 完成数据库初始化建表..."
+  for _ in $(seq 1 60); do
+    if [[ "$(docker compose exec -T database psql -U teslamate -d teslamate -tAc "SELECT to_regclass('public.charging_processes')" 2>/dev/null | tr -d '[:space:]')" == "charging_processes" ]]; then
       break
     fi
     sleep 2
