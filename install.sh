@@ -397,6 +397,11 @@ EOF
   docker compose exec -T database psql -U teslamate -d teslamate \
     -v ON_ERROR_STOP=1 -v app_password="$itesly_db_pass" < "$SCRIPT_DIR/init_readonly.sql" >/dev/null
 
+  if [[ "$EDITION" == "cn" ]]; then
+    docker compose exec -T database psql -U teslamate -d teslamate \
+      -c "UPDATE settings SET language = 'zh' WHERE language = 'en';" >/dev/null 2>&1 || true
+  fi
+
   info "正在启动全部服务..."
   docker compose up -d
 
